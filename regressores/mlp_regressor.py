@@ -7,14 +7,6 @@ import time
 # ==========================================
 class MLPRegressor:
     def __init__(self, hidden_layers=(10,), learning_rate=0.01, epochs=1000, activation='relu'):
-        """
-        Inicializa o Multi Layer Perceptron focado em regressão.
-        
-        :param hidden_layers: Tupla com a quantidade de neurônios por camada oculta.
-        :param learning_rate: Taxa de aprendizado.
-        :param epochs: Número de épocas de treinamento.
-        :param activation: Função de ativação das camadas ocultas ('relu', 'sigmoid', 'tanh').
-        """
         self.hidden_layers = hidden_layers
         self.learning_rate = learning_rate
         self.epochs = epochs
@@ -42,7 +34,7 @@ class MLPRegressor:
         return (Z > 0).astype(float)
 
     def _sigmoid(self, Z):
-        Z = np.clip(Z, -500, 500)  # Prevenir overflow
+        Z = np.clip(Z, -500, 500)  # preveni overflow
         return 1.0 / (1.0 + np.exp(-Z))
 
     def _sigmoid_deriv(self, Z, A):
@@ -58,7 +50,14 @@ class MLPRegressor:
         # Para facilitar a vetorização, transpomos X para (n_features, n_samples)
         # e remodelamos y para (1, n_samples)
         A0 = X.T
-        Y = y.reshape(1, -1)
+        
+        # Normalizando y
+        self.y_mean = np.mean(y)
+        self.y_std = np.std(y)
+        if self.y_std == 0: self.y_std = 1.0
+        
+        y_norm = (y - self.y_mean) / self.y_std
+        Y = y_norm.reshape(1, -1)
         
         n_features = X.shape[1]
         n_samples = X.shape[0]
@@ -133,8 +132,12 @@ class MLPRegressor:
                 
             # Atualização de pesos e bias
             for i in range(len(self.weights)):
-                self.weights[i] -= self.learning_rate * dW_list[i]
-                self.biases[i] -= self.learning_rate * db_list[i]
+                # Gradient clipping para evitar exploração/overflow de gradientes
+                dW_clipped = np.clip(dW_list[i], -5.0, 5.0)
+                db_clipped = np.clip(db_list[i], -5.0, 5.0)
+                
+                self.weights[i] -= self.learning_rate * dW_clipped
+                self.biases[i] -= self.learning_rate * db_clipped
 
     def predict(self, X):
         A = X.T
@@ -151,7 +154,10 @@ class MLPRegressor:
         b_out = self.biases[-1]
         Z_out = np.dot(W_out, A) + b_out
         
-        return Z_out.flatten()
+        Z_out = np.dot(W_out, A) + b_out
+    
+        # Desnormalizando a saída
+        return (Z_out.flatten() * self.y_std) + self.y_mean
 
 # ==========================================
 # 2. FUNÇÕES DE MÉTRICAS (REGRESSÃO)
@@ -222,7 +228,7 @@ def normalizar_features(X_train, X_test):
 # ==========================================
 if __name__ == "__main__":
     # IMPORTANTE: Coloque o caminho correto para o seu dataset
-    caminho = '../datasets/dataset_interest_rate_46507_regressao'
+    caminho = 'datasets/dataset_interest_rate_46507_regressao'
     
     try:
         X, y = carregar_dados_regressao(caminho, indice_alvo=0)
@@ -232,16 +238,27 @@ if __name__ == "__main__":
         exit(1)
     
     # Limita a 10k amostras para execução não ser demasiadamente longa
-    if len(X) > 10000:
-        X, y = X[:10000], y[:10000]
+    #if len(X) > 10000:
+    #    X, y = X[:10000], y[:10000]
 
     p = X.shape[1] # Número de atributos
 
-    # Definição de experimentos variando arquitetura, épocas, taxa de aprendizado e ativação
     experimentos = [
+        # 1. Variando a Quantidade de Neurônios (com 1 camada)
         {"hidden_layers": (10,), "lr": 0.01, "epochs": 500, "act": "relu"},
-        {"hidden_layers": (20, 10), "lr": 0.05, "epochs": 500, "act": "tanh"},
-        {"hidden_layers": (50, 20), "lr": 0.01, "epochs": 300, "act": "relu"},
+        {"hidden_layers": (50,), "lr": 0.01, "epochs": 500, "act": "relu"},
+        
+        # 2. Variando a Quantidade de Camadas Ocultas (1 vs 2 camadas)
+        # O teste (10,) acima serve como a config de 1 camada. Abaixo, a de 2 camadas:
+        {"hidden_layers": (20, 10), "lr": 0.01, "epochs": 500, "act": "relu"},
+        
+        # 3. Variando a Função de Ativação (mantendo a mesma topologia)
+        {"hidden_layers": (20, 10), "lr": 0.01, "epochs": 500, "act": "tanh"},
+        {"hidden_layers": (20, 10), "lr": 0.01, "epochs": 500, "act": "sigmoid"},
+        
+        # 4. Variando Taxa de Aprendizado (LR) e Número de Épocas
+        {"hidden_layers": (20, 10), "lr": 0.05, "epochs": 200, "act": "relu"},   # LR mais alto, menos épocas
+        {"hidden_layers": (20, 10), "lr": 0.005, "epochs": 1000, "act": "relu"},  # LR mais baixo, mais épocas
     ]
 
     print("="*80)
