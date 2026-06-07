@@ -1,37 +1,16 @@
-"""
-=============================================================================
-AV3 - Inteligência Artificial Computacional - UNIFOR
-Classificação: Perceptron Simples e MLP (implementação manual)
-Dataset: SBA-Loans-Case-Data-Set (UCI ID: 43539)
-Alunos: Paulo Henrico Rabelo (2312652) | Levi Tabosa (2224207)
-=============================================================================
-
-COMO USAR:
-  1. Coloque o arquivo do dataset no mesmo diretório deste script e
-     ajuste SBA_FILE_PATH abaixo com o nome exato do arquivo.
-  2. Execute: python classificacao_perceptron_mlp.py
-=============================================================================
-"""
-
 import numpy as np
 import csv
 import time
 
-# ─── CAMINHO DO DATASET ───────────────────────────────────────────────────────
 SBA_FILE_PATH = "../datasets/dataset_Loans-Case_43539_classificacao"
 
-# ─── SEMENTE GLOBAL ──────────────────────────────────────────────────────────
 SEED = 42
 np.random.seed(SEED)
 
-
-# =============================================================================
-# 1. CARREGAMENTO — idêntico ao código original da equipe
 #    Colunas selecionadas (índices):
 #      11=Term, 12=NoEmp, 13=NewExist, 14=CreateJob, 15=RetainedJob,
 #      17=UrbanRural, 22=DisbursementGross, 26=GrAppv, 27=SBA_Appv,
 #      30=Portion, 32=daysterm, 34=Default (alvo)
-# =============================================================================
 
 def process_sba_data(file_path):
     processed_data = []
@@ -67,7 +46,7 @@ def normalize(X_train, X_test=None):
 
 
 # =============================================================================
-# 2. MÉTRICAS (implementação manual — sem sklearn)
+# 2. MÉTRICAS
 # =============================================================================
 
 def get_metrics(y_true, y_pred):
@@ -93,7 +72,7 @@ def print_confusion_matrix(tp, tn, fp, fn, indent="  "):
 
 
 # =============================================================================
-# 3. VALIDAÇÃO CRUZADA K-FOLD (manual, estratificada)
+# 3. VALIDAÇÃO CRUZADA K-FOLD
 # =============================================================================
 
 def stratified_kfold(y, k=5, seed=SEED):
@@ -115,11 +94,6 @@ def stratified_kfold(y, k=5, seed=SEED):
 
 
 def run_cv(model_factory, X, y, k=5):
-    """
-    Executa k-Fold CV.
-    model_factory: função/callable que retorna uma nova instância do modelo.
-    Retorna dicionário com médias, desvios e métricas do último fold.
-    """
     folds = stratified_kfold(y, k=k)
     accs, precs, recs, specs, f1s = [], [], [], [], []
     t_trains, t_tests = [], []
@@ -157,12 +131,9 @@ def run_cv(model_factory, X, y, k=5):
         "last":    last,
     }
 
-
-# =============================================================================
-# 4. PERCEPTRON SIMPLES (implementação manual)
+# 4. PERCEPTRON SIMPLES
 #    Regra de Rosenblatt: w ← w + lr * (y - ŷ) * x
-#    Ativação: degrau (threshold em 0)
-# =============================================================================
+#    Ativação: degrau
 
 class Perceptron:
     def __init__(self, learning_rate=0.01, n_epochs=100, seed=SEED):
@@ -192,14 +163,7 @@ class Perceptron:
         return self._step(X @ self.w + self.b)
 
 
-# =============================================================================
-# 5. MLP PARA CLASSIFICAÇÃO (implementação manual)
-#    Backpropagation com SGD mini-batch
-#    Ocultas: relu | tanh | sigmoid
-#    Saída: sigmoid binária → threshold 0.5
-#    Inicialização: He (relu) / Xavier (tanh, sigmoid)
-# =============================================================================
-
+# 5. MLP PARA CLASSIFICAÇÃO
 class MLPClassifier:
     def __init__(self, hidden_layers=(64,), activation="relu",
                  learning_rate=0.01, n_epochs=50, batch_size=64, seed=SEED):
@@ -230,7 +194,6 @@ class MLPClassifier:
     def _sigmoid(z):
         return 1.0 / (1.0 + np.exp(-np.clip(z, -500, 500)))
 
-    # ── Inicialização ────────────────────────────────────────────────────────
     def _init(self, n_in):
         rng = np.random.RandomState(self.seed)
         sizes = [n_in] + list(self.hidden_layers) + [1]
@@ -243,7 +206,6 @@ class MLPClassifier:
             self.W.append(rng.normal(0, std, (fan_in, fan_out)))
             self.b.append(np.zeros(fan_out))
 
-    # ── Forward ──────────────────────────────────────────────────────────────
     def _forward(self, X):
         acts = [X]
         a = X
@@ -254,12 +216,11 @@ class MLPClassifier:
         acts.append(a_out)
         return acts
 
-    # ── Backward (BCE loss) ──────────────────────────────────────────────────
     def _backward(self, acts, y_batch):
         m   = len(y_batch)
         gW  = [None] * len(self.W)
         gb  = [None] * len(self.b)
-        # Gradiente da saída: d(BCE)/dz_out = a_out - y
+
         delta = acts[-1] - y_batch.reshape(-1, 1)
         for i in reversed(range(len(self.W))):
             gW[i] = (acts[i].T @ delta) / m
@@ -268,7 +229,6 @@ class MLPClassifier:
                 delta = (delta @ self.W[i].T) * self._act_d(acts[i])
         return gW, gb
 
-    # ── Treino ───────────────────────────────────────────────────────────────
     def fit(self, X, y):
         self._init(X.shape[1])
         rng = np.random.RandomState(self.seed)
@@ -288,10 +248,6 @@ class MLPClassifier:
     def predict(self, X, threshold=0.5):
         return (self._forward(X)[-1].ravel() >= threshold).astype(int)
 
-
-# =============================================================================
-# 6. EXPERIMENTOS E IMPRESSÃO
-# =============================================================================
 
 def print_result_detail(name, r):
     m = r
@@ -333,18 +289,12 @@ def print_table(results):
     print(f"\n  ★ Melhor modelo por F1-Score: {best[0]}")
     print(f"    F1 médio = {best[1]['f1_m']:.4f} | Acurácia = {best[1]['acc_m']:.4f}")
 
-
-# =============================================================================
-# 7. MAIN
-# =============================================================================
-
 if __name__ == "__main__":
     print("╔══════════════════════════════════════════════════════════════╗")
     print("║  AV3 — Classificação: Perceptron Simples e MLP              ║")
     print("║  Dataset: SBA-Loans-Case-Data-Set (UCI ID: 43539)           ║")
     print("╚══════════════════════════════════════════════════════════════╝\n")
 
-    # ── Carrega dados (mesmo parser do código original) ──────────────────────
     data = process_sba_data(SBA_FILE_PATH)
     X_all = data[:, :-1]   # 11 features numéricas
     y_all = data[:, -1].astype(int)
@@ -355,10 +305,6 @@ if __name__ == "__main__":
 
     all_results = []
 
-    # =========================================================================
-    # BLOCO A — PERCEPTRON SIMPLES
-    # Varia: learning_rate e n_epochs
-    # =========================================================================
     print("=" * 62)
     print("  PERCEPTRON SIMPLES")
     print("=" * 62)
@@ -376,10 +322,9 @@ if __name__ == "__main__":
         print_result_detail(label, result)
         all_results.append((label, result))
 
-    # =========================================================================
-    # BLOCO B — MLP CLASSIFICAÇÃO
+    # MLP CLASSIFICAÇÃO
     # Varia: topologia, função de ativação, learning_rate e n_epochs
-    # =========================================================================
+  
     print("\n" + "=" * 62)
     print("  MLP — CLASSIFICAÇÃO")
     print("=" * 62)
